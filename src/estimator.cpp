@@ -179,7 +179,10 @@ void Estimator::update(const Frame& f) {
     float context = inPits != meInPits ? cfg_.pPitMismatch : 1.0f;
     cands.push_back({i, x, half, std::sqrt(track * track + g * g), margin, context});
   }
-  std::sort(cands.begin(), cands.end(), [](const Cand& a, const Cand& b) { return a.margin > b.margin; });
+  // keep the cars the spotter could plausibly mean when more than kMaxCands are within reach
+  std::sort(cands.begin(), cands.end(), [](const Cand& a, const Cand& b) {
+    return a.context != b.context ? a.context > b.context : a.margin > b.margin;
+  });
   if (cands.size() > kMaxCands) cands.resize(kMaxCands);
   associate(cands, f.carLeftRight);
 }
