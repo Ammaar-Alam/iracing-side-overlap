@@ -1,0 +1,10 @@
+# toolchain and build output
+.tools/
+bin/
+
+# local telemetry, recordings and per-machine settings
+captures/
+*.ibt
+!tests/fixtures/*.ibt
+side-overlap.ini
+side-overlap-stats.txt
