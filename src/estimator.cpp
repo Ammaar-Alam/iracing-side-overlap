@@ -28,6 +28,9 @@ Occupancy occupancyFor(int status) {
 
 float sigmoid(float t) { return 1.0f / (1.0f + std::exp(-t)); }
 
+// -1 marks a car outside the world, values just past 1 occur at the line and wrap like any other
+bool validPct(float p) { return p > -0.5f && p < 1.5f; }
+
 }  // namespace
 
 void Estimator::setGeometry(const SessionGeometry& g) {
@@ -142,7 +145,7 @@ void Estimator::update(const Frame& f) {
   if (me_ < 0 || me_ >= n || geo_.trackLength <= 0) return;
   view_.myLength = geom(me_).length;
   float myPct = f.lapDistPct[me_];
-  if (!(myPct >= 0 && myPct <= 1)) return;
+  if (!validPct(myPct)) return;
   if (f.carLeftRight < irsdk::kLRClear || f.carLeftRight > irsdk::kLR2CarsRight) return;
   view_.feed = Feed::kLive;
   if ((int)cars_.size() < n) cars_.resize(n);
@@ -151,7 +154,7 @@ void Estimator::update(const Frame& f) {
   cands.clear();
   for (int i = 0; i < n; ++i) {
     float pct = f.lapDistPct[i];
-    bool usable = i != me_ && pct >= 0 && pct <= 1 && f.trackSurface[i] != irsdk::kNotInWorld && !geom(i).ignore;
+    bool usable = i != me_ && validPct(pct) && f.trackSurface[i] != irsdk::kNotInWorld && !geom(i).ignore;
     double d = pct - myPct;
     d -= std::floor(d + 0.5);
     float z = (float)(d * geo_.trackLength) - (geom(i).refOffset - geom(me_).refOffset);

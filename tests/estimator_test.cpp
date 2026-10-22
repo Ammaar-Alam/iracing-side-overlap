@@ -77,6 +77,14 @@ void testWraparound() {
   e.update(b.at(0.0002, {{1, -2.0}}, irsdk::kLRCarLeft));
   v = e.view(b.t);
   CHECK_NEAR(0.5f * (v.left.rear + v.left.front), -2.0f, 0.01f);
+  // the sim briefly reports fractions just past 1 at the line
+  Frame& f = b.at(0.0002, {{1, -2.0}}, irsdk::kLRCarLeft);
+  f.lapDistPct[0] = 1.0000001f;
+  f.lapDistPct[1] = 0.9995f;
+  e.update(f);
+  v = e.view(b.t);
+  CHECK(v.feed == Feed::kLive && v.left.positioned);
+  CHECK_NEAR(0.5f * (v.left.rear + v.left.front), -2.0f, 0.01f);
 }
 
 void testPassOnRight() {
