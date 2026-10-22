@@ -43,7 +43,10 @@ The player's own `Lat`, `Lon` and `Alt` exist only in disk logs, not in the live
 
 - **Live memory while driving:** everything above.
 - **iRacing disk logs (`.ibt`):** player-only. 278 variables with no `CarIdx*` arrays and no `CarLeftRight`. The overlay cannot be evaluated from iRacing's own disk logs, which is why `irinspect capture` records the memory map instead.
-- **Replays:** the memory map keeps publishing `CarIdx*` arrays, and `IsReplayPlaying`, `ReplaySessionTime` and `ReplayFrameNum` describe the replay. The overlay draws nothing while a replay plays.
+- **Replays:** the memory map keeps publishing `CarIdx*` arrays, and `IsReplayPlaying`, `ReplaySessionTime` and `ReplayFrameNum` describe the replay.
+  - The player-only variables (`Speed`, `Velocity*`, `YawRate`) describe our own parked car, not the car being replayed.
+  - `CarLeftRight` read 1 on all 4,790 captured replay ticks. No car overlapped in those frames, so whether the spotter runs during replays is unverified.
+  - The overlay draws nothing while a replay plays.
 - **Array length:** with `irsdkLogAllCars=0` (the default) the `CarIdx*` arrays have 64 entries. The 2026 Season 3 Patch 1 notes say setting it to 1 lets them "grow to the actual size of the entries table." The overlay reads array lengths from the variable headers, so either setting works. Larger arrays add entries, not geometry.
 
 ## Official statements

@@ -7,7 +7,7 @@ All results were recorded live with `irinspect capture` and replayed causally wi
 | Set | Content | Driving ticks | Occupied ticks | Spotter transitions |
 | --- | --- | --- | --- | --- |
 | Tuning | Official MX-5 Cup practice, Lime Rock GP | 61,906 (17.2 min) | 1,369 (355 left, 1,014 right) | 8 |
-| Evaluation | A second event at the same track: practice, lone qualifying, race (finished P10) | 88,500 (24.6 min) | 330 (right) | 2 |
+| Evaluation | Two later race events at the same track, each with practice, lone qualifying and race (finished P10 and P5). The second race had the overlay running live from RaceLab. | 178,009 (49.4 min) | 438 (right) | 4 |
 
 Both sets are online multiplayer at one track with one car model. The only parameter changed after looking at data, the pit lane prior, was chosen from the tuning set alone and then checked on the evaluation set. Three short excerpts with sanitized session data are kept in `tests/fixtures` and replayed by every build.
 
@@ -25,13 +25,15 @@ At every flip of `CarLeftRight` with exactly one car within 8 m, `sideeval` reco
 
 | | n | Error p05 | Median | p95 |
 | --- | --- | --- | --- | --- |
-| Entering | 5 | +0.00 m | **+0.19 m** | +0.23 m |
-| Leaving | 5 | −0.16 m | **+0.04 m** | +0.09 m |
-| Tight radius ≤ 200 m (\|error\|) | 7 | 0.00 m | 0.07 m | 0.23 m |
+| Entering | 6 | +0.00 m | **+0.19 m** | +0.23 m |
+| Leaving | 6 | −0.16 m | **+0.07 m** | +0.14 m |
+| Tight radius ≤ 200 m (\|error\|) | 9 | 0.00 m | 0.09 m | 0.23 m |
 | Straight (\|error\|) | 3 | 0.16 m | 0.19 m | 0.23 m |
 
+All three events are pooled here, because each one produced only two to eight isolated flips. The two held-out race events gave entries of +0.18 and +0.14 m and exits of +0.04 and +0.14 m, in line with the tuning set.
+
 - Lap distance and the spotter agree to within about a quarter of a metre at every observed edge.
-- Exits fit the model within 0.1 m (one outlier at −0.16 m).
+- Exits fit the model within about 0.15 m (one outlier at −0.16 m).
 - Entries are consistently about 0.19 m early. The spotter calls a car alongside while lap distance still shows about 0.19 m of gap. That shift is the same on straights and in corners, so it reads as a property of the spotter's entry threshold, not as error in lap distance. On screen, a car's bar appears with a gap of about 2 px at the default size before it touches your outline.
 - No curvature effect is detectable at this sample size, so the corner term in the uncertainty model is untested by data. In these sessions it never moved a bar into fallback (imprecise fallback 0 %).
 
@@ -41,12 +43,12 @@ At every flip of `CarLeftRight` with exactly one car within 8 m, `sideeval` reco
 | --- | --- | --- |
 | Occupied time with a positioned bar | 100 % (99.49 % before the pit lane prior) | 100 % |
 | Identity switches while positioned | 0 | 0 |
-| Positioned ticks that disagree with hindsight | 0 of 1,369 | 0 of 330 |
+| Positioned ticks that disagree with hindsight | 0 of 1,369 | 0 of 438 |
 | Occupied with no car within reach (unplaceable) | 0 | 0 |
 
 - The only fallback ever seen was 7 ticks (0.12 s) on the main straight. Two cars parked in pit stalls beside the track sat level with us by lap distance and competed with the real car alongside.
 - In the tuning set, a single overlapping car on pit road while we were on track (or the reverse) was called by the spotter in 0 of 260 ticks. That motivated a 0.02 prior for pit lane mismatches.
-- The evaluation set confirmed the prior: 0 of 200 such ticks were called.
+- The first held-out race event confirmed the prior: 0 of 200 such ticks were called.
 - A similar rule for off-track cars was rejected. When we put two wheels off, the spotter still reported the car beside us in 65 % of ticks.
 
 ## Why the spotter must stay in charge
@@ -64,23 +66,23 @@ An overlay that drew the nearest car by lap distance would have shown a car besi
 | Measure | Result |
 | --- | --- |
 | Tick interval on the host | median 16.66 ms, 95 % within 14.9–18.4 ms |
-| Missed or torn ticks | 0 in 155,319 rows (RaceLab reading at the same time) |
+| Missed or torn ticks | 0 in 247,982 rows (RaceLab reading at the same time) |
 | Event wakes without a new tick | 0 |
-| Nearby on-track cars whose position froze for a tick | 0 of 21,743 samples |
-| Tick-to-tick change in a nearby car's step | median 0.001 m, p99.9 0.006 m, max 0.013 m |
+| Nearby on-track cars whose position froze for a tick | 1 of 42,157 samples |
+| Tick-to-tick change in a nearby car's step | median 0.001 m, p99.9 0.005 m, max 0.013 m |
 
 Remote cars move smoothly every tick, and there is no noise to filter. Whatever network smoothing iRacing applies happens before the SDK, and the overlay matches what the local sim renders and collides with.
 
 ## Filtering and prediction
 
-Measured over all 1,699 occupied side-ticks:
+Measured over all 1,807 occupied side-ticks:
 
 | Variant | \|bar − raw\| p95 | Error vs next tick p50 / p95 | Roughness p95 |
 | --- | --- | --- | --- |
-| Raw (chosen) | 0 | 1.7 / 5.7 cm | 2 mm |
-| Alpha-beta (0.5, 0.1) | 0.7 cm | 1.7 / 5.8 cm | 1 mm |
-| Kalman, constant velocity | 2.6 cm | 1.8 / 6.4 cm | 1 mm |
-| Raw + one tick prediction | 1.7 cm (by design) | 0.0 / 0.1 cm | 2 mm |
+| Raw (chosen) | 0 | 1.8 / 6.9 cm | 2 mm |
+| Alpha-beta (0.5, 0.1) | 0.7 cm | 1.9 / 6.8 cm | 2 mm |
+| Kalman, constant velocity | 2.7 cm | 1.9 / 7.5 cm | 2 mm |
+| Raw + one tick prediction | 6.9 cm (one tick ahead by design) | 0.0 / 0.2 cm | 2 mm |
 
 - Filtering only adds lag.
 - One tick of prediction would remove about 2 cm of median latency error. That is an order of magnitude below the edge agreement above, so the overlay draws raw positions and does not extrapolate.
@@ -89,7 +91,7 @@ Measured over all 1,699 occupied side-ticks:
 ## Stale data, disconnects and session changes
 
 - **Ticks stop for 0.3 s while driving:** the reference turns grey with a slash. Covered by a synthetic test.
-- **Our own position becomes undefined:** this also shows as unavailable. Live, it happened on 11 single ticks (0.18 s in 41.8 min). Each was the tick where our own lap fraction reads −1 during a tow or reset to the pits, or the first tick after getting in the car.
+- **Our own position becomes undefined:** this also shows as unavailable. Live, it happened on 15 single ticks (0.25 s in 66.6 min). Each was the tick where our own lap fraction reads −1 during a tow or reset to the pits, or the first tick after getting in the car.
 - **Lap fractions just past 1 at the start/finish line:** treated as valid and wrapped.
 - **No ticks for 10 s:** the sim is treated as gone. The window clears, the memory map is released and reopened when the sim returns.
 - **Session number, session id, player car or replay jump changes:** the estimator resets all per-car history. Covered by a unit test.
