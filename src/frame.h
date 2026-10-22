@@ -13,7 +13,6 @@ struct Frame {
   int sessionNum = -1;
   int sessionUid = -1;
   int playerIdx = -1;
-  int camCarIdx = -1;
   int carLeftRight = -1;   // irsdk::CarLeftRight, -1 when the variable is missing
   bool isOnTrack = false;
   bool isReplay = false;
@@ -28,7 +27,7 @@ struct Frame {
 class FrameDecoder {
  public:
   enum VarId {
-    kSessionTime, kSessionNum, kSessionUid, kPlayerIdx, kCamCarIdx, kCarLeftRight, kIsOnTrack, kIsReplay,
+    kSessionTime, kSessionNum, kSessionUid, kPlayerIdx, kCarLeftRight, kIsOnTrack, kIsReplay,
     kSpeed, kYawRate, kVelX, kVelY, kLapDistPct, kTrackSurface, kOnPitRoad, kVarCount
   };
   struct VarSpec {

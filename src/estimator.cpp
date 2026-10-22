@@ -137,10 +137,9 @@ void Estimator::update(const Frame& f) {
   diag_.clear();
   view_ = {};
 
-  bool replay = cfg_.replayUsesCamCar && f.isReplay;
-  me_ = replay ? f.camCarIdx : f.playerIdx;
+  me_ = f.playerIdx;
   int n = (int)f.lapDistPct.size();
-  if (!replay && (!f.isOnTrack || f.isReplay)) return;  // not driving, nothing to spot
+  if (!f.isOnTrack || f.isReplay) return;  // not driving, nothing to spot
   view_.feed = Feed::kUnavailable;
   if (me_ < 0 || me_ >= n || geo_.trackLength <= 0) return;
   view_.myLength = geom(me_).length;

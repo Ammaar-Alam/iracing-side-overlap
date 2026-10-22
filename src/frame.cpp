@@ -1,10 +1,20 @@
 #include "frame.h"
 
 const FrameDecoder::VarSpec FrameDecoder::kVars[kVarCount] = {
-    {"SessionTime", true},      {"SessionNum", false},         {"SessionUniqueID", false}, {"PlayerCarIdx", true},
-    {"CamCarIdx", false},       {"CarLeftRight", true},        {"IsOnTrack", true},        {"IsReplayPlaying", false},
-    {"Speed", false},           {"YawRate", false},            {"VelocityX", false},       {"VelocityY", false},
-    {"CarIdxLapDistPct", true}, {"CarIdxTrackSurface", false}, {"CarIdxOnPitRoad", false},
+    {"SessionTime", true},
+    {"SessionNum", false},
+    {"SessionUniqueID", false},
+    {"PlayerCarIdx", true},
+    {"CarLeftRight", true},
+    {"IsOnTrack", true},
+    {"IsReplayPlaying", false},
+    {"Speed", false},
+    {"YawRate", false},
+    {"VelocityX", false},
+    {"VelocityY", false},
+    {"CarIdxLapDistPct", true},
+    {"CarIdxTrackSurface", false},
+    {"CarIdxOnPitRoad", false},
 };
 
 void FrameDecoder::bind(const irsdk::Schema& s) {
@@ -24,7 +34,6 @@ void FrameDecoder::decode(const uint8_t* row, Frame& f) const {
   f.sessionNum = (int)scalar(kSessionNum, -1);
   f.sessionUid = (int)scalar(kSessionUid, -1);
   f.playerIdx = (int)scalar(kPlayerIdx, -1);
-  f.camCarIdx = (int)scalar(kCamCarIdx, -1);
   f.carLeftRight = (int)scalar(kCarLeftRight, -1);
   f.isOnTrack = scalar(kIsOnTrack, 0) != 0;
   f.isReplay = scalar(kIsReplay, 0) != 0;

@@ -13,7 +13,6 @@ struct Settings {
   uint32_t referenceColor = 0xFFFFFF;
   uint32_t unavailableColor = 0xA0A0A0;
   int fps = 60;
-  std::string filter = "raw";
   std::map<std::string, float> carLengths;  // CarPath -> metres
 
   void load(const std::wstring& path);

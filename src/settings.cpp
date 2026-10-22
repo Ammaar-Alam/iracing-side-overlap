@@ -59,7 +59,6 @@ void Settings::load(const std::wstring& path) {
   referenceColor = readColor(path, L"reference", referenceColor);
   unavailableColor = readColor(path, L"unavailable", unavailableColor);
   fps = readInt(path, L"behaviour", L"fps", fps);
-  filter = narrow(readStr(path, L"behaviour", L"filter", widen(filter).c_str()));
 
   std::vector<wchar_t> buf(8192);
   DWORD n = GetPrivateProfileSectionW(L"cars", buf.data(), (DWORD)buf.size(), path.c_str());
@@ -80,7 +79,6 @@ void Settings::save(const std::wstring& path) const {
   write(path, L"colors", L"reference", hex(referenceColor));
   write(path, L"colors", L"unavailable", hex(unavailableColor));
   write(path, L"behaviour", L"fps", std::to_wstring(fps));
-  write(path, L"behaviour", L"filter", widen(filter));
   for (const auto& [carPath, length] : carLengths) write(path, L"cars", widen(carPath).c_str(), std::to_wstring(length));
 }
 

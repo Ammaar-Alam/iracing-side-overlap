@@ -43,7 +43,6 @@ struct EstimatorConfig {
   float alpha = 0.5f, beta = 0.1f;
   float accelNoise = 8.0f;         // Kalman relative acceleration noise, m/s^2
   float predict = 0.0f;            // forward prediction horizon, s
-  bool replayUsesCamCar = false;   // analysis only: treat the camera car as the reference in replays
 };
 
 enum class Feed { kInactive, kUnavailable, kLive };

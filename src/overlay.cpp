@@ -115,8 +115,6 @@ std::string narrowPath(const std::wstring& w) {
 EstimatorConfig estimatorConfig() {
   EstimatorConfig c;
   c.padding = spotterPadding();
-  if (g.s.filter == "kalman") c.filter = FilterKind::kKalman;
-  else if (g.s.filter == "alphabeta") c.filter = FilterKind::kAlphaBeta;
   return c;
 }
 
@@ -506,8 +504,8 @@ void writeStats() {
   std::wstring path = g.iniPath.substr(0, g.iniPath.size() - 4) + L"-stats.txt";
   FILE* f = _wfopen(path.c_str(), L"a");
   if (!f) return;
-  fprintf(f, "uptime_s=%.1f ticks=%d missed_ticks=%d presents=%d fps_cap=%d filter=%s\n", up, g.stats.ticks,
-          g.stats.missedTicks, g.stats.presents, g.s.fps, g.s.filter.c_str());
+  fprintf(f, "uptime_s=%.1f ticks=%d missed_ticks=%d presents=%d fps_cap=%d\n", up, g.stats.ticks,
+          g.stats.missedTicks, g.stats.presents, g.s.fps);
   fprintf(f, "cpu_s=%.3f cpu_pct_one_core=%.3f peak_working_set_kb=%zu private_kb=%zu\n", ft(kernel) + ft(user),
           100 * (ft(kernel) + ft(user)) / up, pm.PeakWorkingSetSize / 1024, pm.PrivateUsage / 1024);
   fprintf(f, "startup_to_first_present_ms=%.1f\n", (g.stats.firstPresent - g.stats.start) * 1e3);
