@@ -119,80 +119,84 @@ EstimatorConfig estimatorConfig() {
 }
 
 // ---------- drawing ----------
+// Each side is a capsule track standing for our car, front at the top. The fill marks the part
+// of our car the other car covers on that side, so it grows up from the bottom as a car arrives
+// at the rear quarter and leaves through the top as it clears ahead.
 
 struct Layout {
-  float laneW, refW, leftX, rightX, refX, top, bottom, mid, perMetre, unit;
+  float trackW, leftX, rightX, top, bottom, unit;
 };
 
-Layout layoutFor(int w, int h, float myLength) {
+Layout layoutFor(int w, int h) {
   Layout l;
   l.unit = g.dpi / 96.0f;
-  float pad = 3 * l.unit;
-  l.laneW = std::max(4.0f, std::round(w * 0.15f));
-  l.refW = std::max(6.0f, std::round(w * 0.30f));
+  float pad = 2 * l.unit;
+  l.trackW = std::max(8.0f, std::round(std::min(w * 0.2f, h * 0.24f)));
   l.leftX = pad;
-  l.rightX = w - pad - l.laneW;
-  l.refX = std::round(0.5f * (w - l.refW));
+  l.rightX = w - pad - l.trackW;
   l.top = pad;
   l.bottom = h - pad;
-  l.mid = 0.5f * h;
-  // the window spans our car plus a full car length beyond each bumper
-  float range = 1.5f * myLength + 0.6f;
-  l.perMetre = (l.bottom - l.top) / (2 * range);
   return l;
 }
 
-float yFor(const Layout& l, float metresAhead) { return l.mid - metresAhead * l.perMetre; }
-
-void sideKey(const SideView& sv, const Layout& l, int out[4]) {
-  out[0] = sv.reported;
-  out[1] = sv.positioned;
-  out[2] = sv.positioned ? (int)std::lround(std::clamp(yFor(l, sv.front), l.top, l.bottom) * 2) : 0;
-  out[3] = sv.positioned ? (int)std::lround(std::clamp(yFor(l, sv.rear), l.top, l.bottom) * 2) : 0;
+// vertical pixel span of the covered part of our car, at least a sliver at the end the car is on
+bool fillSpan(const SideView& sv, const Layout& l, float myLength, float& y0, float& y1) {
+  if (!sv.positioned) return false;
+  float half = 0.5f * myLength, height = l.bottom - l.top;
+  float front = std::clamp(sv.front, -half, half), rear = std::clamp(sv.rear, -half, half);
+  y0 = l.top + (half - front) / myLength * height;
+  y1 = l.top + (half - rear) / myLength * height;
+  float sliver = std::max(l.trackW, 0.2f * height);
+  if (y1 - y0 < sliver) {
+    if (sv.front + sv.rear < 0) y0 = std::max(l.top, y1 - sliver);
+    else y1 = std::min(l.bottom, y0 + sliver);
+    if (y1 - y0 < sliver) (y0 == l.top ? y1 : y0) = y0 == l.top ? l.top + sliver : l.bottom - sliver;
+  }
+  return true;
 }
 
-void drawSide(Canvas& c, const SideView& sv, const Layout& l, float x, Color bar) {
+void sideKey(const SideView& sv, const Layout& l, float myLength, int out[4]) {
+  float y0 = 0, y1 = 0;
+  out[0] = sv.reported;
+  out[1] = fillSpan(sv, l, myLength, y0, y1);
+  out[2] = (int)std::lround(y0 * 2);
+  out[3] = (int)std::lround(y1 * 2);
+}
+
+void drawSide(Canvas& c, const SideView& sv, const Layout& l, float x, float myLength, Color bar, Color track) {
+  float w = l.trackW, r = 0.5f * w;
+  c.fillRoundRect(x, l.top, x + w, l.bottom, r, rgb(0x0c0f12, 0.6f));
+  c.strokeRoundRect(x, l.top, x + w, l.bottom, r, 1.2f * l.unit, track);
   if (sv.reported == 0) return;
-  bool multi = sv.reported > 1;
-  float gap = std::max(1.5f * l.unit, l.laneW * 0.22f);
-  float half = 0.5f * (l.laneW - gap);
-  if (sv.positioned) {
-    float y0 = std::clamp(yFor(l, sv.front), l.top, l.bottom);
-    float y1 = std::clamp(yFor(l, sv.rear), l.top, l.bottom);
-    if (y1 - y0 < l.laneW) y1 = y0 + l.laneW;  // keep a sliver visible at the window edge
-    if (multi) {
-      c.fillRoundRect(x, y0, x + half, y1, half * 0.5f, bar);
-      c.fillRoundRect(x + l.laneW - half, y0, x + l.laneW, y1, half * 0.5f, bar);
+  float inset = 2.5f * l.unit, x0 = x + inset, x1 = x + w - inset, ri = r - inset;
+  float y0, y1;
+  if (fillSpan(sv, l, myLength, y0, y1)) {
+    y0 += inset;
+    y1 -= inset;
+    if (sv.reported > 1) {
+      // two cars on this side: the fill splits in two
+      float mid = 0.5f * (x0 + x1), gap = std::max(1.5f * l.unit, 0.12f * w);
+      c.fillRoundRect(x0, y0, mid - 0.5f * gap, y1, 0.5f * (mid - x0), bar);
+      c.fillRoundRect(mid + 0.5f * gap, y0, x1, y1, 0.5f * (mid - x0), bar);
     } else {
-      c.fillRoundRect(x, y0, x + l.laneW, y1, 0.5f * l.laneW, bar);
+      c.fillRoundRect(x0, y0, x1, y1, ri, bar);
     }
     return;
   }
-  // occupied but not placeable: the whole lane lights up without a position
-  Color fill = bar, edge = bar;
-  fill.a *= 0.28f;
-  float stroke = 1.5f * l.unit;
-  if (multi) {
-    for (float sx : {x, x + l.laneW - half}) {
-      c.fillRoundRect(sx, l.top, sx + half, l.bottom, half * 0.5f, fill);
-      c.strokeRoundRect(sx, l.top, sx + half, l.bottom, half * 0.5f, stroke, edge);
-    }
-  } else {
-    c.fillRoundRect(x, l.top, x + l.laneW, l.bottom, 0.5f * l.laneW, fill);
-    c.strokeRoundRect(x, l.top, x + l.laneW, l.bottom, 0.5f * l.laneW, stroke, edge);
-  }
+  // occupied but not placeable: the whole track is striped
+  c.fillRoundRectStriped(x0, l.top + inset, x1, l.bottom - inset, ri, 7 * l.unit, bar);
 }
 
 void present(const View& v, double frameTime, bool force) {
   bool showDemo = g.demo || g.edit || g.playing;
-  Layout l = layoutFor(g.w, g.h, v.myLength);
+  Layout l = layoutFor(g.w, g.h);
   DrawKey key;
   key.feed = (int)v.feed;
   key.w = g.w;
   key.h = g.h;
   key.flags = (g.edit ? 1 : 0) | (showDemo ? 2 : 0);
-  sideKey(v.left, l, key.left);
-  sideKey(v.right, l, key.right);
+  sideKey(v.left, l, v.myLength, key.left);
+  sideKey(v.right, l, v.myLength, key.right);
   if (!force && key == g.drawn) return;
   double now = hostSeconds();
   // the margin absorbs tick jitter so a 60 Hz cap never drops a 60 Hz telemetry update
@@ -201,25 +205,20 @@ void present(const View& v, double frameTime, bool force) {
   Canvas& c = g.canvas;
   c.clear();
   if (g.edit) {
-    c.fillRoundRect(0, 0, (float)g.w, (float)g.h, 6 * l.unit, rgb(0x101418, 0.55f));
+    c.fillRoundRect(0, 0, (float)g.w, (float)g.h, 6 * l.unit, rgb(0x101418, 0.45f));
     c.strokeRoundRect(0, 0, (float)g.w, (float)g.h, 6 * l.unit, 1.0f * l.unit, rgb(0xFFFFFF, 0.5f));
   }
-  if (showDemo) c.text("DEMO", 0.5f * g.w - 11.5f * l.unit, 1.5f * l.unit, l.unit, rgb(0xFFFFFF, 0.7f));
-  if (v.feed != Feed::kInactive) {
-    float half = 0.5f * v.myLength * l.perMetre;
-    float r = l.refW * 0.35f;
-    float x0 = l.refX, x1 = l.refX + l.refW, y0 = l.mid - half, y1 = l.mid + half;
-    if (v.feed == Feed::kUnavailable) {
-      Color u = rgb(g.s.unavailableColor, 0.85f);
-      c.strokeRoundRect(x0, y0, x1, y1, r, 1.5f * l.unit, u);
-      c.line(x0 - 2 * l.unit, y1 + 2 * l.unit, x1 + 2 * l.unit, y0 - 2 * l.unit, 1.5f * l.unit, u);
-    } else {
-      c.fillRoundRect(x0, y0, x1, y1, r, rgb(g.s.referenceColor, 0.14f));
-      c.strokeRoundRect(x0, y0, x1, y1, r, 1.2f * l.unit, rgb(g.s.referenceColor, 0.38f));
-      Color bar = rgb(g.s.barColor);
-      drawSide(c, v.left, l, l.leftX, bar);
-      drawSide(c, v.right, l, l.rightX, bar);
+  if (showDemo) c.text("DEMO", 0.5f * g.w - 17.5f * l.unit, 4 * l.unit, 1.5f * l.unit, rgb(0xFFFFFF, 0.8f));
+  if (v.feed == Feed::kUnavailable) {
+    Color u = rgb(g.s.unavailableColor, 0.85f);
+    for (float x : {l.leftX, l.rightX}) {
+      c.strokeRoundRect(x, l.top, x + l.trackW, l.bottom, 0.5f * l.trackW, 1.5f * l.unit, u);
+      c.line(x, l.bottom - 0.3f * l.trackW, x + l.trackW, l.top + 0.3f * l.trackW, 1.5f * l.unit, u);
     }
+  } else if (v.feed == Feed::kLive) {
+    Color bar = rgb(g.s.barColor), track = rgb(g.s.trackColor, 0.35f);
+    drawSide(c, v.left, l, l.leftX, v.myLength, bar, track);
+    drawSide(c, v.right, l, l.rightX, v.myLength, bar, track);
   }
 
   POINT src{0, 0};

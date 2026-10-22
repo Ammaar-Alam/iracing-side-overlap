@@ -3,7 +3,9 @@
 //   irinspect capture [--seconds N] [--out DIR]    record live telemetry to .ibt until Ctrl+C
 //   irinspect ibt FILE [--out DIR]                 same inventory for a recorded .ibt
 //   irinspect clip IN OUT --from ROW --to ROW [--yaml FILE]  compact sanitized excerpt for test fixtures
+//   irinspect serve FILE [--from ROW] [--to ROW] [--stall ROW]  replays a recording as a live sim
 #include <windows.h>
+#include <tlhelp32.h>
 
 #include <algorithm>
 #include <atomic>
@@ -321,13 +323,105 @@ int runClip(const std::string& in, const std::string& out, int from, int to, con
   return 0;
 }
 
+bool simRunning() {
+  HANDLE snap = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+  PROCESSENTRY32W pe{};
+  pe.dwSize = sizeof pe;
+  bool found = false;
+  for (BOOL ok = Process32FirstW(snap, &pe); ok && !found; ok = Process32NextW(snap, &pe))
+    found = _wcsnicmp(pe.szExeFile, L"iRacingSim", 10) == 0;
+  CloseHandle(snap);
+  return found;
+}
+
+// stands in for the simulator, publishing a recording through the SDK memory map at its tick rate
+// so the overlay's live path can be tested end to end while iRacing is closed
+int runServe(const std::string& path, int from, int to, int stallRow) {
+  IbtReader r;
+  if (!r.open(path)) {
+    fprintf(stderr, "cannot read %s\n", path.c_str());
+    return 1;
+  }
+  const irsdk::Schema& s = r.schema();
+  const std::string& info = r.sessionInfo();
+  constexpr int kBufs = 3;
+  int varOffset = sizeof(irsdk::Header);
+  int infoOffset = varOffset + (int)(s.vars.size() * sizeof(irsdk::VarHeader));
+  int infoLen = (int)info.size() + 1;
+  int bufOffset = (infoOffset + infoLen + 15) & ~15;
+  DWORD total = bufOffset + kBufs * s.bufLen;
+  HANDLE map = CreateFileMappingW(INVALID_HANDLE_VALUE, nullptr, PAGE_READWRITE, 0, total, irsdk::kMemMapName);
+  // other SDK readers such as RaceLab keep the map alive after the sim exits, reuse it unless the sim is back
+  bool existed = map && GetLastError() == ERROR_ALREADY_EXISTS;
+  if (!map || (existed && simRunning())) {
+    fprintf(stderr, "the simulator is running, close it first\n");
+    if (map) CloseHandle(map);
+    return 1;
+  }
+  auto* base = static_cast<uint8_t*>(MapViewOfFile(map, FILE_MAP_ALL_ACCESS, 0, 0, total));
+  if (!base) {
+    fprintf(stderr, "cannot map %lu bytes of the telemetry map\n", total);
+    CloseHandle(map);
+    return 1;
+  }
+  HANDLE ev = CreateEventW(nullptr, TRUE, FALSE, irsdk::kDataValidEventName);
+  auto* h = reinterpret_cast<irsdk::Header*>(base);
+  *h = {};
+  h->ver = 2;
+  h->tickRate = r.tickRate();
+  h->sessionInfoUpdate = 1;
+  h->sessionInfoLen = infoLen;
+  h->sessionInfoOffset = infoOffset;
+  h->numVars = (int)s.vars.size();
+  h->varHeaderOffset = varOffset;
+  h->numBuf = kBufs;
+  h->bufLen = s.bufLen;
+  for (int i = 0; i < kBufs; ++i) h->varBuf[i].bufOffset = bufOffset + i * s.bufLen;
+  memcpy(base + varOffset, s.vars.data(), s.vars.size() * sizeof(irsdk::VarHeader));
+  memcpy(base + infoOffset, info.c_str(), infoLen);
+  h->status = irsdk::kStatusConnected;
+  printf("serving %s at %d Hz\n", path.c_str(), h->tickRate);
+
+  HANDLE timer = CreateWaitableTimerExW(nullptr, nullptr, CREATE_WAITABLE_TIMER_HIGH_RESOLUTION, TIMER_ALL_ACCESS);
+  std::vector<uint8_t> row;
+  int tick = 0;
+  double start = hostSeconds();
+  for (int index = 0; !g_quit && (to <= 0 || index < to) && r.next(row); ++index) {
+    if (index < from) continue;
+    if (index == stallRow) {
+      printf("stalling at row %d\n", index);  // ticks stop while the status stays connected
+      Sleep(2000);
+      start = hostSeconds() - (double)tick / h->tickRate;
+    }
+    int b = tick % kBufs;
+    memcpy(base + h->varBuf[b].bufOffset, row.data(), s.bufLen);
+    std::atomic_thread_fence(std::memory_order_release);
+    h->varBuf[b].tickCount = ++tick;
+    PulseEvent(ev);
+    double wait = start + (double)tick / h->tickRate - hostSeconds();
+    if (wait > 0) {
+      LARGE_INTEGER due;
+      due.QuadPart = -(LONGLONG)(wait * 1e7);
+      SetWaitableTimer(timer, &due, 0, nullptr, nullptr, FALSE);
+      WaitForSingleObject(timer, INFINITE);
+    }
+  }
+  h->status = 0;
+  printf("stopped after %d ticks\n", tick);
+  CloseHandle(timer);
+  CloseHandle(ev);
+  UnmapViewOfFile(base);
+  CloseHandle(map);
+  return 0;
+}
+
 }  // namespace
 
 int main(int argc, char** argv) {
   SetConsoleCtrlHandler(onCtrl, TRUE);
   std::string mode = argc > 1 ? argv[1] : "";
   std::string outDir = ".", file, file2, yaml;
-  int from = 0, to = 0;
+  int from = 0, to = 0, stall = -1;
   double seconds = mode == "inventory" ? 10 : 1e12;
   for (int i = 2; i < argc; ++i) {
     std::string a = argv[i];
@@ -336,6 +430,7 @@ int main(int argc, char** argv) {
     else if (a == "--from" && i + 1 < argc) from = atoi(argv[++i]);
     else if (a == "--yaml" && i + 1 < argc) yaml = argv[++i];
     else if (a == "--to" && i + 1 < argc) to = atoi(argv[++i]);
+    else if (a == "--stall" && i + 1 < argc) stall = atoi(argv[++i]);
     else (file.empty() ? file : file2) = a;
   }
   if (mode != "clip") CreateDirectoryA(outDir.c_str(), nullptr);
@@ -343,8 +438,10 @@ int main(int argc, char** argv) {
   if (mode == "capture") return runCapture(outDir, seconds);
   if (mode == "ibt" && !file.empty()) return runIbt(file, outDir);
   if (mode == "clip" && !file2.empty() && to > from) return runClip(file, file2, from, to, yaml);
+  if (mode == "serve" && !file.empty()) return runServe(file, from, to, stall);
   fprintf(stderr,
           "usage:\n  irinspect inventory [--seconds N] [--out DIR]\n  irinspect capture [--seconds N] [--out DIR]\n"
-          "  irinspect ibt FILE [--out DIR]\n  irinspect clip IN.ibt OUT.ibt --from ROW --to ROW [--yaml FILE]\n");
+          "  irinspect ibt FILE [--out DIR]\n  irinspect clip IN.ibt OUT.ibt --from ROW --to ROW [--yaml FILE]\n"
+          "  irinspect serve FILE.ibt [--from ROW] [--to ROW] [--stall ROW]\n");
   return 2;
 }

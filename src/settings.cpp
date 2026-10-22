@@ -56,7 +56,7 @@ void Settings::load(const std::wstring& path) {
   height = readInt(path, L"window", L"height", height);
   opacity = readInt(path, L"window", L"opacity", opacity);
   barColor = readColor(path, L"bar", barColor);
-  referenceColor = readColor(path, L"reference", referenceColor);
+  trackColor = readColor(path, L"track", trackColor);
   unavailableColor = readColor(path, L"unavailable", unavailableColor);
   fps = readInt(path, L"behaviour", L"fps", fps);
 
@@ -76,7 +76,7 @@ void Settings::save(const std::wstring& path) const {
   write(path, L"window", L"height", std::to_wstring(height));
   write(path, L"window", L"opacity", std::to_wstring(opacity));
   write(path, L"colors", L"bar", hex(barColor));
-  write(path, L"colors", L"reference", hex(referenceColor));
+  write(path, L"colors", L"track", hex(trackColor));
   write(path, L"colors", L"unavailable", hex(unavailableColor));
   write(path, L"behaviour", L"fps", std::to_wstring(fps));
   for (const auto& [carPath, length] : carLengths) write(path, L"cars", widen(carPath).c_str(), std::to_wstring(length));

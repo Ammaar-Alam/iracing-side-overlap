@@ -23,6 +23,8 @@ class Canvas {
   void fillRoundRect(float x0, float y0, float x1, float y1, float r, Color c);
   void strokeRoundRect(float x0, float y0, float x1, float y1, float r, float width, Color c);
   void line(float ax, float ay, float bx, float by, float width, Color c);
+  // diagonal stripes clipped to a rounded rectangle
+  void fillRoundRectStriped(float x0, float y0, float x1, float y1, float r, float period, Color c);
   // tiny 5x7 pixel font, only the glyphs the overlay labels use
   void text(const char* s, float x, float y, float scale, Color c);
 

@@ -57,6 +57,16 @@ void Canvas::fillRoundRect(float x0, float y0, float x1, float y1, float r, Colo
   shade(x0, y0, x1, y1, c, [&](float px, float py) { return 0.5f - roundRectDistance(px, py, x0, y0, x1, y1, r); });
 }
 
+void Canvas::fillRoundRectStriped(float x0, float y0, float x1, float y1, float r, float period, Color c) {
+  r = std::min({r, 0.5f * (x1 - x0), 0.5f * (y1 - y0)});
+  shade(x0, y0, x1, y1, c, [&](float px, float py) {
+    float inside = 0.5f - roundRectDistance(px, py, x0, y0, x1, y1, r);
+    float s = std::fmod(px + py, period);
+    float stripe = std::clamp(std::min(s, period - s) - 0.25f * period + 0.5f, 0.0f, 1.0f);
+    return std::min(inside, stripe);
+  });
+}
+
 void Canvas::strokeRoundRect(float x0, float y0, float x1, float y1, float r, float width, Color c) {
   r = std::min({r, 0.5f * (x1 - x0), 0.5f * (y1 - y0)});
   float h = 0.5f * width;
